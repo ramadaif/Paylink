@@ -1,1 +1,45 @@
+@startuml
+title Sequence - Refund a Failed Payment (release the hold)
+autonumber
+actor Customer
+participant "Failure Source" as Src
+participant "PaymentService" as PS
+participant "PaymentState\n(current state object)" as St
+participant "WalletService" as WS
+database "DB" as DB
+participant "AuditService" as Audit
+participant "Event Bus" as Bus
+participant "NotificationService" as NS
 
+
+
+Src -> PS : paymentFailed(reference, reason, source)
+PS -> DB : load payment (lock row)
+alt payment already FAILED / REFUNDED / COMPLETED
+  PS --> Src : ignored (logged as duplicate or conflict)
+else payment is SENT_TO_BILLER or UNKNOWN
+  PS -> St : fail(payment, reason)
+  St -> St : check transition is allowed
+  St --> PS : FAILED
+  PS -> DB : status -> FAILED, store failureReason,\nadd state history row (who, when, cause)
+
+  PS -> WS : releaseHold(paymentId)
+  WS -> DB : BEGIN, lock wallet row
+  WS -> DB : insert HOLD_RELEASE entry\n(available +352.50, held -352.50)
+  WS -> DB : COMMIT
+  WS --> PS : released
+
+  PS -> St : refund(payment)
+  St --> PS : REFUNDED (final)
+  PS -> DB : status FAILED -> REFUNDED + history row
+ 
+
+  PS -> Audit : log(actor=system or user, action=HOLD_RELEASED, reason)
+  Audit -> DB : insert audit_log
+  PS -> Bus : publish PaymentRefunded(reason)
+  Bus -> NS : PaymentRefunded
+  NS -> Customer : SMS + push with the clear reason
+  
+end
+
+@enduml
