@@ -1,1 +1,108 @@
+@startuml 01-use-case-v2
+title PayLink - Use-Case Diagram
+left to right direction
+skinparam packageStyle rectangle
+
+actor Customer
+actor Agent
+actor Admin
+actor "Support Employee" as Support
+actor "Finance Team" as Finance
+actor "Biller\n(ElectroCo, AquaCo,\nTopUpNet, NetCo)" as Biller <<external>>
+actor "SMS / Email / Push\nProvider" as NotifProvider <<external>>
+
+rectangle "PayLink Backend" {
+
+  package "Accounts and Wallet" {
+    usecase "Register account" as UC_Reg
+    usecase "Upgrade to verified" as UC_Upg
+    usecase "View balance and history" as UC_Bal
+    usecase "Top up wallet" as UC_Top
+  }
+
+  package "Biller Catalog" {
+    usecase "Browse billers and fields" as UC_Browse
+    usecase "Manage billers and services (US-06)" as UC_Manage
+  }
+
+  package "Payment Processing" {
+    usecase "Run bill inquiry" as UC_Inq
+    usecase "Pay a bill" as UC_Pay
+    usecase "Pay on behalf of customer" as UC_PayAgent
+    usecase "Calculate fee" as UC_Fee
+    usecase "Run fraud checks" as UC_Fraud
+    usecase "Hold funds" as UC_Hold
+    usecase "Call biller" as UC_Call
+    usecase "Handle timeout -> Unknown" as UC_Timeout
+    usecase "Refund failed payment\n(release hold)" as UC_RefundFail
+    usecase "Receive biller callback" as UC_Callback
+    usecase "Re-query Unknown payment" as UC_Requery
+    usecase "Send notification" as UC_Notify
+    usecase "Credit agent commission" as UC_Comm
+    usecase "Request refund of\ncompleted payment" as UC_ReqRefund
+    usecase "Approve / reject refund" as UC_Decide
+  }
+
+  package "Administration" {
+    usecase "Edit fees and limits" as UC_Config
+    usecase "View audit log" as UC_Audit
+  }
+
+  package "Support" {
+    usecase "Search payment by reference" as UC_Search
+    usecase "Block / unblock account" as UC_Block
+  }
+
+  package "Reconciliation and Reporting" {
+    usecase "Reconcile with settlement file" as UC_Recon
+    usecase "View reconciliation report" as UC_Report
+    usecase "View daily totals" as UC_Totals
+  }
+}
+
+Customer --> UC_Reg
+Customer --> UC_Upg
+Customer --> UC_Bal
+Customer --> UC_Top
+Customer --> UC_Browse
+Customer --> UC_Inq
+Customer --> UC_Pay
+Customer --> UC_ReqRefund
+
+Agent --> UC_PayAgent
+Agent --> UC_Top
+Agent --> UC_Bal
+
+Admin --> UC_Manage
+Admin --> UC_Config
+Admin --> UC_Totals
+Admin --> UC_Audit
+
+Support --> UC_Search
+Support --> UC_Block
+Support --> UC_Decide
+Support --> UC_Report
+
+Finance --> UC_Report
+Finance --> UC_Totals
+
+UC_Callback <-- Biller
+UC_Inq --> Biller
+UC_Call --> Biller
+UC_Recon <-- Biller : settlement file
+UC_Notify --> NotifProvider
+
+UC_Pay ..> UC_Inq : <<include>>
+UC_Pay ..> UC_Fee : <<include>>
+UC_Pay ..> UC_Fraud : <<include>>
+UC_Pay ..> UC_Hold : <<include>>
+UC_Pay ..> UC_Call : <<include>>
+UC_Pay ..> UC_Notify : <<include>>
+UC_PayAgent ..> UC_Comm : <<include>>
+UC_Pay ..> UC_PayAgent : <<extend>>
+UC_Timeout ..> UC_Requery : <<extend>>
+UC_Call ..> UC_Timeout : <<extend>>
+UC_Call ..> UC_RefundFail : <<extend>>
+UC_RefundFail ..> UC_Callback : <<extend>>
+@enduml
 
