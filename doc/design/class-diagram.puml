@@ -1,1 +1,94 @@
+@startuml 02-class-diagram-v2
+title PayLink - Domain Class Diagram
+hide empty members
+skinparam classAttributeIconSize 0
 
+class User {
+  id
+  name
+  phone
+  role : CUSTOMER, AGENT, ADMIN, SUPPORT
+  verificationLevel : BASIC, VERIFIED
+  status : ACTIVE, BLOCKED
+}
+class Wallet {
+  id
+  availableBalance()
+  heldBalance()
+}
+class LedgerEntry {
+  type
+  availableDelta : Money
+  heldDelta : Money
+  createdAt
+}
+class Biller {
+  name
+  active
+}
+class BillerService {
+  serviceType
+  requiredFields
+  minAmount : Money
+  maxAmount : Money
+}
+class FeeRule {
+  type : FIXED, PERCENTAGE, TIERED
+  values
+}
+class Promotion {
+  startDate
+  endDate
+}
+class Payment {
+  reference
+  idempotencyKey
+  billAmount : Money
+  feeAmount : Money
+  totalAmount : Money
+  status : PaymentStatus
+}
+class PaymentStateChange {
+  fromStatus
+  toStatus
+  changedAt
+}
+class CommissionRecord {
+  amount : Money
+}
+class RefundRequest {
+  reason
+  status : PENDING, APPROVED, REJECTED
+}
+class Notification {
+  channel : SMS, EMAIL, PUSH
+  status : PENDING, SENT, UNDELIVERED
+  attempts
+}
+class ReconciliationDifference {
+  paymentReference
+  type
+}
+class AuditLog {
+  action
+  reason
+  occurredAt
+}
+
+User "0..1" -- "0..1" Wallet : owns
+Wallet "1" *-- "0..*" LedgerEntry
+User "1" -- "0..*" Payment : customer
+User "0..1" -- "0..*" Payment : agent
+Biller "1" *-- "1..*" BillerService
+BillerService "1" -- "1..*" FeeRule
+Biller "1" -- "0..*" Promotion
+Payment "*" -- "1" BillerService
+Payment "1" *-- "1..*" PaymentStateChange
+Payment "0..1" -- "0..*" LedgerEntry
+Payment "1" -- "0..1" CommissionRecord
+Payment "1" -- "0..*" RefundRequest
+Payment "0..1" -- "0..*" Notification
+Payment "0..1" -- "0..*" ReconciliationDifference
+User "0..1" -- "0..*" AuditLog : actor
+
+@enduml
