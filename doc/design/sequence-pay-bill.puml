@@ -1,1 +1,22 @@
+@startuml
+title State Diagram - Payment Life Cycle (section 2.5)
+hide empty description
 
+[*] --> Initiated : payment created
+
+Initiated --> FundsHeld : Checks pass AND\nwallet has enough funds
+Initiated --> Rejected : Check fails OR\ninsufficient funds
+FundsHeld --> SentToBiller : request sent to biller
+SentToBiller --> Completed : biller confirms
+SentToBiller --> Failed : biller refuses
+SentToBiller --> Unknown : no answer within 10 s
+Unknown --> Completed : biller later confirms\n(callback, re-query, settlement file)
+Unknown --> Failed : biller later refuses OR\nreconciliation finds no payment
+Failed --> Refunded : hold released to wallet
+
+Completed --> [*]
+Rejected --> [*]
+Refunded --> [*]
+
+
+@enduml
