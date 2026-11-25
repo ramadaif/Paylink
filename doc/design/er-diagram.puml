@@ -1,208 +1,244 @@
-@startuml 06-er-diagram
-title PayLink - ER Diagram (PostgreSQL, 20 tables)
+@startuml 06-er-diagram-v2
+title PayLink - ER Diagram
 hide circle
 skinparam linetype ortho
-' All money columns are NUMERIC(14,2). There is NO balance column on wallet.
+' Money columns are numeric(14,2). There is NO balance column on wallet.
 
 entity app_user {
   * id : int <<PK>>
+  --
   * name : varchar
   * phone : varchar <<unique>>
   * password_hash : varchar
+  * created_at : time
   * role : varchar  (CUSTOMER, AGENT, ADMIN, SUPPORT)
   * verification_level : varchar  (BASIC, VERIFIED)
   * status : varchar  (ACTIVE, BLOCKED)
-  * created_at : timestamptz
 }
+
 entity wallet {
-  * id : int<<PK>>
-  * owner_id : int<<FK>>  (null for system wallets)
+  * id : int <<PK>>
+  --
   * type : varchar
+  owner_id : int <<FK>>  (null for system wallets)
   * currency : char(3)
   * version : bigint  (optimistic lock, not a balance)
 }
+
 entity ledger_entry {
-  * id : int<<PK>>
-  * wallet_id : int<<FK>>
-  * payment_id : int<<FK>>
+  * id : int <<PK>>
+  --
+  * wallet_id : int <<FK>>
+  payment_id : int <<FK>>
   * entry_type : varchar
+  * reference : varchar
+  description : varchar
+  * created_by : int <<FK>>
+  * created_at : time
   * available_delta : numeric(14,2)
   * held_delta : numeric(14,2)
-  * reference : varchar
-  * description : varchar
-  * created_by : int<<FK>>
-  * created_at : timestamptz
 }
+
 entity account_block {
-  * id : int<<PK>>
-  * user_id : int<<FK>>
-  * blocked_by : int<<FK>>
+  * id : int <<PK>>
+  --
+  * user_id : int <<FK>>
+  blocked_by : int <<FK>>
   * reason : varchar
-  * blocked_at : timestamptz
-  * blocked_until : timestamptz
+  * blocked_at : time
+  blocked_until : time
   * active : boolean
 }
-entity biller {
-  * id : int<<PK>>
-  * name : varchar <<unique>>
-  * protocol : varchar  (REST_JSON, SOAP_XML, ASYNC_JSON, BATCH_CSV)
-  * active : boolean
-}
-entity biller_service {
-  * id : int<<PK>>
-  * biller_id : int<<FK>>
-  * service_type : varchar
-  * min_amount : numeric(14,2)
-  * max_amount : numeric(14,2)
-  * active : boolean
-}
-entity service_field {
-  * id : int<<PK>>
-  * biller_service_id : int<<FK>>
-  * name : varchar
-  * label : varchar
-  * validation_regex : varchar
-}
-entity fee_rule {
-  * id : int<<PK>>
-  * biller_service_id : int<<FK>>
-  * fee_type : varchar  (FIXED, PERCENTAGE, TIERED)
-  * fixed_amount : numeric(14,2)
-  * percentage : numeric(6,4)
-  * minimum_fee : numeric(14,2)
-  * tier_threshold : numeric(14,2)
-  * tier_low_fee : numeric(14,2)
-  * tier_high_fee : numeric(14,2)
-}
-entity promotion {
-  * id : int<<PK>>
-  * biller_id : int<<FK>>
-  * start_date : date
-  * end_date : date
-}
-entity config_setting {
-  * key : varchar <<PK>>
-  * value : varchar
-  * updated_by : int<<FK>>
-  * updated_at : timestamptz
-}
-entity payment {
-  * id : int<<PK>>
-  * reference : varchar <<unique>>
-  * idempotency_key : varchar
-  * request_hash : varchar
-  * customer_id : int<<FK>>
-  agent_id : int<<FK>>
-  * biller_service_id : int<<FK>>
-  * account_ref : varchar  (meter / phone number)
-  * bill_amount : numeric(14,2)
-  * fee_amount : numeric(14,2)
-  * total_amount : numeric(14,2)
-  * status : varchar
-  failure_reason : varchar
-  * created_at : timestamptz
-  * updated_at : timestamptz
-  unique (customer_id, idempotency_key)
-}
-entity payment_state_change {
-  * id : int<<PK>>
-  * payment_id : int<<FK>>
-  from_status : varchar
-  * to_status : varchar
-  * cause : varchar
-  * changed_at : timestamptz
-}
-entity commission_record {
-  * id : int<<PK>>
-  * payment_id : int<<FK>> <<unique>>
-  * agent_id : int<<FK>>
-  * amount : numeric(14,2)
-  * created_at : timestamptz
-}
-entity retry_task {
-  * id : int<<PK>>
-  * payment_id : int<<FK>>
-  * attempt_no : int
-  * scheduled_at : timestamptz
-  * status : varchar  (PENDING, DONE, NO_ANSWER)
-}
-entity biller_callback_log {
-  * id : int<<PK>>
-  payment_id : int<<FK>>  (null if reference unknown)
-  * reference : varchar
-  * payload : text
-  * outcome : varchar  (APPLIED, DUPLICATE_IGNORED, UNKNOWN_REFERENCE)
-  * received_at : timestamptz
-}
-entity refund_request {
-  * id : int<<PK>>
-  * payment_id : int<<FK>>
-  * requested_by : int<<FK>>
-  * reason : varchar
-  * status : varchar  (PENDING, APPROVED, REJECTED)
-  * decided_by : int<<FK>>
-  * decision_reason : varchar
-  * decided_at : timestamptz
-}
-entity notification {
-  * id : int<<PK>>
-  * user_id : int<<FK>>
-  * payment_id : int<<FK>>
-  * channel : varchar  (SMS, EMAIL, PUSH)
-  * template : varchar
-  * status : varchar  (PENDING, SENT, UNDELIVERED)
-  * attempts : int
-  * created_at : timestamptz
-}
-entity settlement_file {
-  * id : int<<PK>>
-  * biller_id : int<<FK>>
-  * business_date : date
-  * received_at : time
-  * unique (biller_id, business_date)
-}
-entity reconciliation_difference {
-  * id : int<<PK>>
-  * settlement_file_id : int<<FK>>
-  * payment_id : int<<FK>>
-  * payment_reference : varchar
-  * difference_type : varchar
-  * review_status : varchar  (OPEN, REVIEWED)
-  * reviewed_by : int<<FK>>
-}
+
 entity audit_log {
-  * id : int<<PK>>
-  * actor_id : int<<FK>>  (or system)
+  * id : int <<PK>>
+  --
   * action : varchar
   * entity_type : varchar
   * entity_id : varchar
   * reason : varchar
   * occurred_at : timestamptz
+  actor_id : int <<FK>>  (null = system)
 }
 
-app_user ||--o| wallet : owns
+entity config_setting {
+  * key : varchar <<PK>>
+  --
+  * value : varchar
+  * updated_by : int <<FK>>
+  * updated_at : timestamptz
+}
+
+entity biller {
+  * id : int <<PK>>
+  --
+  * name : varchar <<unique>>
+  * active : boolean
+  * protocol : varchar  (REST_JSON, SOAP_XML, ASYNC_JSON, BATCH_CSV)
+}
+
+entity biller_service {
+  * id : int <<PK>>
+  --
+  * biller_id : int <<FK>>
+  * service_type : varchar
+  * active : boolean
+  * min_amount : numeric(14,2)
+  * max_amount : numeric(14,2)
+}
+
+entity service_field {
+  * id : int <<PK>>
+  --
+  * biller_service_id : int <<FK>>
+  * name : varchar
+  * label : varchar
+  validation_regex : varchar
+}
+
+entity fee_rule {
+  * id : int <<PK>>
+  --
+  * biller_service_id : int <<FK>>
+  * fee_type : varchar  (FIXED, PERCENTAGE, TIERED)
+  fixed_amount : numeric(14,2)
+  percentage : numeric(6,4)
+  minimum_fee : numeric(14,2)
+  tier_threshold : numeric(14,2)
+  tier_low_fee : numeric(14,2)
+  tier_high_fee : numeric(14,2)
+}
+
+entity promotion {
+  * id : int <<PK>>
+  --
+  * biller_id : int <<FK>>
+  * start_date : date
+  * end_date : date
+}
+
+entity settlement_file {
+  * id : int <<PK>>
+  --
+  * biller_id : int <<FK>>
+  * business_date : date
+  * received_at : time
+}
+
+entity payment {
+  * id : int <<PK>>
+  --
+  * reference : varchar <<unique>>
+  * idempotency_key : varchar
+  * request_hash : varchar
+  * customer_id : int <<FK>>
+  agent_id : int <<FK>>
+  * biller_service_id : int <<FK>>
+  * status : varchar
+  failure_reason : varchar
+  * created_at : time
+  * updated_at : time
+  * account_ref : varchar  (meter / phone number)
+  * bill_amount : numeric(14,2)
+  * fee_amount : numeric(14,2)
+  * total_amount : numeric(14,2)
+}
+
+entity payment_state_change {
+  * id : int <<PK>>
+  --
+  * payment_id : int <<FK>>
+  from_status : varchar
+  * to_status : varchar
+  * cause : varchar
+  * changed_at : time
+}
+
+entity commission_record {
+  * id : int <<PK>>
+  --
+  * payment_id : int <<FK>> <<unique>>
+  * agent_id : int <<FK>>
+  * created_at : time
+  * amount : numeric(14,2)
+}
+
+entity retry_task {
+  * id : int <<PK>>
+  --
+  * payment_id : int <<FK>>
+  * attempt_no : int
+  * scheduled_at : time
+  * status : varchar  (PENDING, DONE, NO_ANSWER)
+}
+
+entity biller_callback_log {
+  * id : int <<PK>>
+  --
+  payment_id : int <<FK>>  (null if reference unknown)
+  * reference : varchar
+  * payload : text
+  * received_at : time
+  * outcome : varchar  (APPLIED, DUPLICATE_IGNORED, UNKNOWN_REFERENCE)
+}
+
+entity refund_request {
+  * id : int <<PK>>
+  --
+  * payment_id : int <<FK>>
+  * requested_by : int <<FK>>
+  * reason : varchar
+  decided_by : int <<FK>>
+  decision_reason : varchar
+  decided_at : timestamptz
+  * status : varchar  (PENDING, APPROVED, REJECTED)
+}
+
+entity notification {
+  * id : int <<PK>>
+  --
+  * user_id : int <<FK>>
+  payment_id : int <<FK>>
+  * template : varchar
+  * attempts : int
+  * created_at : timestamptz
+  * channel : varchar  (SMS, EMAIL, PUSH)
+  * status : varchar  (PENDING, SENT, UNDELIVERED)
+}
+
+entity reconciliation_difference {
+  * id : int <<PK>>
+  --
+  * settlement_file_id : int <<FK>>
+  payment_id : int <<FK>>
+  * payment_reference : varchar
+  * difference_type : varchar
+  reviewed_by : int <<FK>>
+  * review_status : varchar  (OPEN, REVIEWED)
+}
+
+app_user |o--o| wallet : owns
+app_user |o--o{ audit_log : actor
 app_user ||--o{ account_block
-wallet ||--o{ ledger_entry
-payment |o--o{ ledger_entry
-biller ||--|{ biller_service
-biller_service ||--|{ service_field
-biller_service ||--|{ fee_rule
-biller ||--o{ promotion
 app_user ||--o{ payment : customer
 app_user |o--o{ payment : agent
+app_user ||--o{ notification
+
+biller ||--|{ biller_service
+biller ||--o{ promotion
+biller ||--o{ settlement_file
 biller_service ||--o{ payment
-payment ||--|{ payment_state_change
-payment ||--o| commission_record
-app_user ||--o{ commission_record : agent
-payment ||--o{ retry_task
+biller_service ||--|{ fee_rule
+biller_service ||--|{ service_field
+
+wallet ||--o{ ledger_entry
+payment |o--o{ ledger_entry
+payment |o--o{ notification
 payment |o--o{ biller_callback_log
 payment ||--o{ refund_request
-app_user ||--o{ refund_request : requested_by
-app_user ||--o{ notification
-payment |o--o{ notification
-biller ||--o{ settlement_file
-settlement_file ||--o{ reconciliation_difference
+payment ||--|{ payment_state_change
+payment ||--o| commission_record
+payment ||--o{ retry_task
 payment |o--o{ reconciliation_difference
-app_user ||--o{ audit_log : actor
-app_user ||--o{ config_setting : updated_by
+settlement_file ||--o{ reconciliation_difference
 @enduml
