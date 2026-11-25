@@ -1,0 +1,108 @@
+@startuml
+title Sequence - Pay a Bill
+autonumber
+actor Customer
+participant "Payment API" as API
+participant "PaymentService\n(orchestrator)" as PS
+participant "FeeCalculator" as Fee
+participant "FraudChain" as Fraud
+participant "WalletService" as WS
+database "DB\n(ledger, payment)" as DB
+participant "BillerAdapterFactory" as BAF
+participant "ElectroCoAdapter" as EA
+participant "ElectroCo\n(mock biller)" as EC
+participant "Event Bus" as Bus
+participant "NotificationService" as NS
+
+== Bill inquiry (US-08) ==
+Customer -> API : GET inquiry(electroco, meter 123)
+API -> PS : inquire(service, meter)
+PS -> BAF : forBiller(electroco)
+BAF --> PS : ElectroCoAdapter
+PS -> EA : inquire(meter)
+EA -> EC : GET /bills/123
+EC --> EA : 350.00
+EA --> PS : BillInquiry(350.00)
+PS -> Fee : feeFor(service, 350.00, today)
+Fee --> PS : 2.50
+PS --> API : bill 350.00, fee 2.50, total 352.50
+API --> Customer : amounts shown
+
+== Pay (US-09, US-10) ==
+Customer -> API : POST /payments (Idempotency-Key K1, 350.00)
+API -> PS : pay(request)
+PS -> DB : find payment by (customer, K1)
+alt key already used
+  DB --> PS : existing payment
+  alt same request hash
+    PS --> API : original result
+    API --> Customer : 200 original result (no new charge)
+  else different data
+    PS --> API : key conflict
+    API --> Customer : 409 Conflict
+  end
+else new key
+  PS -> Fee : feeFor(...)
+  Fee --> PS : 2.50
+  PS -> DB : insert Payment [INITIATED] + state history
+  
+  PS -> Fraud : check(account, amount)
+    alt a rule fails
+    Fraud --> PS : rejected(reason)
+    PS -> DB : status INITIATED -> REJECTED
+    PS -> Bus : publish PaymentRejected
+    PS --> API : Rejected + reason
+    API --> Customer : clear reason
+  else all rules pass
+    Fraud --> PS : ok
+    PS -> WS : hold(wallet, 352.50, ref)
+    WS -> DB : BEGIN, lock wallet row,\nsum ledger for available
+    alt available < 352.50
+      WS -> DB : ROLLBACK
+      WS --> PS : insufficient funds
+      PS -> DB : status INITIATED -> REJECTED
+      PS --> API : Rejected (insufficient funds)
+      API --> Customer : Rejected
+    else enough funds
+      WS -> DB : insert HOLD entry\n(available -352.50, held +352.50), COMMIT
+      WS --> PS : held
+      PS -> DB : status INITIATED -> FUNDS_HELD
+      PS -> DB : status FUNDS_HELD -> SENT_TO_BILLER
+      PS -> BAF : forBiller(electroco)
+      BAF --> PS : ElectroCoAdapter
+      PS -> EA : pay(reference, 350.00)
+      EA -> EC : POST /payments (reference as idempotency)
+      alt biller confirms within 10 s
+        EC --> EA : paid
+        EA --> PS : CONFIRMED
+        PS -> DB : status SENT_TO_BILLER -> COMPLETED
+        PS -> WS : settle(paymentId)
+        WS -> DB : CHARGE (held -352.50),\nFEE_INCOME +2.50,\nBILLER_PAYABLE +350.00
+        opt agent-assisted payment
+          PS -> WS : creditCommission(agent, 1.00)
+          WS -> DB : COMMISSION entries (40% of fee)
+        end
+        PS -> Bus : publish PaymentCompleted
+        PS --> API : Completed
+        API --> Customer : success + receipt
+      else biller refuses
+        EC --> EA : refused(code)
+        EA --> PS : REFUSED(reason)
+        PS -> DB : status SENT_TO_BILLER -> FAILED
+        ref over PS, WS, DB : see 04-sequence-refund-failed-payment
+      else no answer in 10 s
+        EA --> PS : TIMEOUT
+        PS -> DB : status SENT_TO_BILLER -> UNKNOWN\n(money stays held)
+        PS -> DB : schedule re-queries at +1, +5, +15 min
+        PS -> Bus : publish PaymentUnknown
+        PS --> API : Processing
+        API --> Customer : "being processed"
+      end
+    end
+  end
+end
+
+== Notifications (asynchronous, US-24) ==
+Bus -> NS : PaymentCompleted / Failed / Unknown
+NS -> NS : render template, send SMS + push
+@enduml
